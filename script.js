@@ -268,6 +268,41 @@ function exportPNG() {
     });
 }
 
+// ESPORTAZIONE PDF
+function exportPDF() {
+    updateState();
+    const captureArea = document.getElementById('capture-area');
+
+    document.body.classList.add('is-exporting');
+
+    html2canvas(captureArea, {
+        backgroundColor: "#ECE3CB",
+        scale: 2,
+        useCORS: true,
+        ignoreElements: (element) => element.classList.contains('no-export')
+    }).then(canvas => {
+        document.body.classList.remove('is-exporting');
+
+        const imgData = canvas.toDataURL('image/png');
+        const { jsPDF } = window.jspdf;
+
+        // Pagina PDF con le stesse proporzioni dell'immagine catturata
+        const orientation = canvas.width >= canvas.height ? 'l' : 'p';
+        const pdf = new jsPDF({
+            orientation: orientation,
+            unit: 'px',
+            format: [canvas.width, canvas.height]
+        });
+
+        pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+        pdf.save('Scheda_Studio.pdf');
+    }).catch(err => {
+        document.body.classList.remove('is-exporting');
+        console.error("Errore durante l'esportazione PDF", err);
+        alert("Si è verificato un errore durante l'esportazione del PDF.");
+    });
+}
+
 // GESTIONE MODALE RESET
 function openModal() { document.getElementById('confirm-modal').classList.remove('hidden'); }
 function closeModal() { document.getElementById('confirm-modal').classList.add('hidden'); }
