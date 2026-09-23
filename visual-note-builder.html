@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visual Note Builder</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --paper: #ECE3CB;
+            --card: #F7F1E1;
+            --ink: #2A2317;
+            --ink-soft: #6B5F49;
+            --line: rgba(42,35,23,0.14);
+            --ochre: #B07F24;
+            --teal: #3B6963;
+            --rust: #9B3A2C;
+        }
+        body {
+            background-color: var(--paper);
+            background-image:
+                repeating-linear-gradient(to bottom, transparent, transparent 27px, var(--line) 28px),
+                radial-gradient(ellipse at top, rgba(255,255,255,0.45), transparent 60%);
+            color: var(--ink);
+            font-family: 'IBM Plex Sans', sans-serif;
+        }
+        .font-display { font-family: 'Fraunces', serif; }
+
+        [contenteditable]:empty:before {
+            content: attr(data-placeholder);
+            color: var(--ink-soft);
+            opacity: 0.65;
+            pointer-events: none;
+            display: block;
+        }
+        [contenteditable]:focus { outline: none; background: rgba(176,127,36,0.08); }
+
+        .is-exporting .no-export { display: none !important; }
+        .card-container { min-width: 0; word-wrap: break-word; }
+
+        .hard-shadow { box-shadow: 5px 5px 0 var(--ink); }
+        .hard-shadow-sm { box-shadow: 3px 3px 0 rgba(42,35,23,0.55); }
+
+        .btn-tab {
+            border: 1.5px solid var(--ink);
+            background: var(--card);
+            color: var(--ink);
+            box-shadow: 4px 4px 0 var(--ink);
+            transition: transform .12s ease, box-shadow .12s ease;
+        }
+        .btn-tab:hover { transform: translate(-2px,-2px); box-shadow: 6px 6px 0 var(--ink); }
+        .btn-tab:active { transform: translate(0,0); box-shadow: 2px 2px 0 var(--ink); }
+
+        .btn-tab .tab-strip { display:block; height:4px; margin:-14px -18px 10px -18px; }
+
+        .icon-btn {
+            width: 22px; height: 22px;
+            display: inline-flex; align-items: center; justify-content: center;
+            border: 1.5px solid var(--ink);
+            background: var(--card);
+            font-size: 11px;
+        }
+        .icon-btn:hover { background: var(--ink); color: var(--card); }
+
+        .spine-hole {
+            width: 11px; height: 11px;
+            border-radius: 50%;
+            background: var(--paper);
+            border: 1.5px solid rgba(42,35,23,0.35);
+            box-shadow: inset 1px 1px 2px rgba(0,0,0,0.25);
+        }
+
+        .image-slot {
+            border: 1.5px dashed var(--ink-soft);
+        }
+        .image-slot:hover { border-color: var(--ink); background: rgba(176,127,36,0.08); }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center py-10 px-4">
+
+    <!-- Toolbar dei comandi (non esportata in PNG) -->
+    <div class="mb-8 flex flex-wrap gap-4 no-export" id="main-toolbar">
+        <button onclick="exportPNG()" class="btn-tab px-5 py-3 font-semibold text-sm">
+            <span class="tab-strip" style="background:var(--ochre)"></span>
+            <i class="fa-solid fa-image mr-2"></i>Esporta immagine
+        </button>
+        <button onclick="saveJSON()" class="btn-tab px-5 py-3 font-semibold text-sm">
+            <span class="tab-strip" style="background:var(--teal)"></span>
+            <i class="fa-solid fa-floppy-disk mr-2"></i>Salva dati
+        </button>
+        <label class="btn-tab px-5 py-3 font-semibold text-sm cursor-pointer">
+            <span class="tab-strip" style="background:var(--ink-soft)"></span>
+            <i class="fa-solid fa-folder-open mr-2"></i>Carica dati
+            <input type="file" accept=".json" class="hidden" id="file-input" onchange="loadJSON(event)">
+        </label>
+        <button onclick="openModal()" class="btn-tab px-5 py-3 font-semibold text-sm">
+            <span class="tab-strip" style="background:var(--rust)"></span>
+            <i class="fa-solid fa-trash mr-2"></i>Svuota tutto
+        </button>
+    </div>
+
+    <!-- Area da esportare in immagine -->
+    <div id="capture-area" class="w-full max-w-5xl relative pl-12" style="background:var(--card); border:2px solid var(--ink);" >
+        <div class="hard-shadow absolute inset-0 -z-10" style="background:var(--card); border:2px solid var(--ink);"></div>
+
+        <!-- Dorso a quaderno -->
+        <div class="absolute left-0 top-0 bottom-0 w-12 flex flex-col items-center justify-evenly py-8" style="border-right:1.5px solid var(--line);">
+            <div class="spine-hole"></div>
+            <div class="spine-hole"></div>
+            <div class="spine-hole"></div>
+            <div class="spine-hole"></div>
+            <div class="spine-hole"></div>
+        </div>
+
+        <div class="p-8 pl-6">
+            <!-- Header: Immagine e Titoli -->
+            <div class="p-6 mb-6 flex gap-6 items-center card-container" style="border-bottom:1.5px solid var(--ink);">
+                <!-- Box Immagine -->
+                <div class="image-slot w-32 h-40 flex items-center justify-center relative group shrink-0 overflow-hidden">
+                    <img id="main-image" src="" alt="" class="w-full h-full object-cover hidden">
+                    <div id="image-placeholder" class="text-center text-sm p-2" style="color:var(--ink-soft)">
+                        <i class="fa-solid fa-image mb-1 block text-lg"></i>Clicca per<br>immagine
+                    </div>
+                    <input type="file" accept="image/*" class="absolute inset-0 opacity-0 cursor-pointer" onchange="uploadImage(event)">
+                    <button onclick="removeImage(event)" id="remove-image-btn" class="icon-btn absolute top-1 right-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hidden no-export" style="background:var(--rust); color:var(--card); border-color:var(--ink);">
+                        <i class="fa-solid fa-xmark text-xs"></i>
+                    </button>
+                </div>
+
+                <!-- Box Testo Header -->
+                <div class="flex-1 min-w-0">
+                    <h1 id="main-title" contenteditable="true" data-placeholder="Inserisci Titolo Principale" class="font-display text-4xl font-semibold mb-2 outline-none break-words" onblur="updateState()"></h1>
+                    <h2 id="main-subtitle" contenteditable="true" data-placeholder="Inserisci Sottotitolo o Date" class="text-lg italic outline-none break-words" style="color:var(--ink-soft)" onblur="updateState()"></h2>
+                </div>
+            </div>
+
+            <!-- Griglia delle Sezioni -->
+            <div id="sections-grid" class="grid grid-cols-1 md:grid-cols-2 gap-6 pb-2">
+                <!-- Le sezioni verranno renderizzate qui dal JavaScript -->
+            </div>
+
+            <!-- Pulsante Aggiungi Sezione (Nascosco nel PNG) -->
+            <button onclick="addSection()" class="btn-tab mt-6 px-4 py-2 text-sm font-semibold flex items-center gap-2 no-export">
+                <i class="fa-solid fa-plus"></i> Aggiungi nuova sezione
+            </button>
+        </div>
+    </div>
+
+    <!-- Modale Svuota Tutto -->
+    <div id="confirm-modal" class="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center hidden z-50 px-4">
+        <div class="hard-shadow p-7 max-w-md w-full text-center" style="background:var(--card); border:2px solid var(--ink);">
+            <h3 class="font-display text-xl font-semibold mb-3">Svuotare l'area di lavoro?</h3>
+            <p class="mb-6 text-sm" style="color:var(--ink-soft)">Tutti i dati non salvati andranno persi. Sei sicuro di voler continuare?</p>
+            <div class="flex justify-center gap-4">
+                <button onclick="closeModal()" class="btn-tab px-4 py-2 font-semibold text-sm">Annulla</button>
+                <button onclick="resetApp()" class="btn-tab px-4 py-2 font-semibold text-sm" style="background:var(--rust); color:var(--card);">Svuota tutto</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // STATO APPLICAZIONE (Inizia vuoto)
+        let state = {
+            title: "",
+            subtitle: "",
+            imageSrc: "",
+            sections: [
+                { id: 1, title: "Titolo Sezione 1:", items: [{ id: 101, text: "Inserisci qui il tuo primo punto." }] },
+                { id: 2, title: "Titolo Sezione 2:", items: [{ id: 201, text: "Inserisci qui il tuo primo punto." }] }
+            ]
+        };
+
+        // NORMALIZZAZIONE DATI (Retrocompatibilità per vecchi file JSON)
+        function normalizeLoadedData(data) {
+            let normalized = {
+                title: data.title || data.mainTitle || "",
+                subtitle: data.subtitle || "",
+                imageSrc: data.imageSrc || "",
+                sections: []
+            };
+
+            if (data.sections && Array.isArray(data.sections)) {
+                normalized.sections = data.sections.map((sec, sIdx) => {
+                    let newItems = [];
+                    if (sec.items && Array.isArray(sec.items)) {
+                        newItems = sec.items.map((item, iIdx) => {
+                            // Se il vecchio JSON aveva un array di stringhe, lo convertiamo in oggetti
+                            if (typeof item === 'string') {
+                                return { id: Date.now() + iIdx, text: item };
+                            }
+                            // Se è già un oggetto, lo teniamo
+                            return item;
+                        });
+                    }
+                    return {
+                        id: sec.id || Date.now() + sIdx,
+                        title: sec.title || "",
+                        items: newItems
+                    };
+                });
+            }
+            return normalized;
+        }
+
+        // RENDERING DELL'INTERFACCIA
+        function render() {
+            // Aggiorna Header
+            document.getElementById('main-title').innerText = state.title;
+            document.getElementById('main-subtitle').innerText = state.subtitle;
+
+            const imgEl = document.getElementById('main-image');
+            const imgPh = document.getElementById('image-placeholder');
+            const rmvBtn = document.getElementById('remove-image-btn');
+
+            if (state.imageSrc) {
+                imgEl.src = state.imageSrc;
+                imgEl.classList.remove('hidden');
+                imgPh.classList.add('hidden');
+                rmvBtn.classList.remove('hidden');
+            } else {
+                imgEl.src = "";
+                imgEl.classList.add('hidden');
+                imgPh.classList.remove('hidden');
+                rmvBtn.classList.add('hidden');
+            }
+
+            // Aggiorna Sezioni
+            const grid = document.getElementById('sections-grid');
+            grid.innerHTML = '';
+
+            state.sections.forEach((sec, sIndex) => {
+                let itemsHtml = '';
+                const accent = sIndex % 2 === 0 ? 'var(--ochre)' : 'var(--teal)';
+
+                sec.items.forEach((item, iIndex) => {
+                    itemsHtml += `
+                        <div class="group flex items-start gap-3 relative min-w-0 mb-3 pl-1">
+                            <!-- Segno punto -->
+                            <div class="w-2 h-2 mt-[7px] shrink-0" style="background:${accent}"></div>
+
+                            <!-- Testo Editable -->
+                            <div contenteditable="true" data-section-id="${sec.id}" data-item-id="${item.id}"
+                                 class="bullet-text outline-none flex-1 text-[14px] leading-[1.5] break-words min-w-0"
+                                 onblur="updateItemText(this)">${item.text}</div>
+
+                            <!-- Controlli Hover (Nascosi nell'esportazione PNG) -->
+                            <div class="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 absolute right-0 top-0 pl-2 no-export" style="background:var(--card);">
+                                <button onclick="moveItem(${sec.id}, ${item.id}, -1)" class="icon-btn" title="Sposta Su"><i class="fa-solid fa-chevron-up"></i></button>
+                                <button onclick="moveItem(${sec.id}, ${item.id}, 1)" class="icon-btn" title="Sposta Giù"><i class="fa-solid fa-chevron-down"></i></button>
+                                <button onclick="deleteItem(${sec.id}, ${item.id})" class="icon-btn" style="color:var(--rust)" title="Elimina"><i class="fa-solid fa-xmark"></i></button>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                grid.innerHTML += `
+                    <div class="p-6 card-container relative group/section" style="background:var(--card); border:1.5px solid var(--ink); box-shadow:4px 4px 0 rgba(42,35,23,0.3);">
+                        <!-- Intestazione Sezione -->
+                        <div class="flex items-center gap-2 mb-4 pb-2" style="border-bottom:1.5px solid var(--ink);">
+                            <span class="w-2.5 h-2.5 shrink-0" style="background:${accent}"></span>
+                            <div contenteditable="true" data-section-title-id="${sec.id}" class="font-display text-lg font-semibold outline-none break-words flex-1" onblur="updateSectionTitle(this)">${sec.title}</div>
+                        </div>
+
+                        <!-- Pulsante Elimina Sezione (Hover) -->
+                        <button onclick="deleteSection(${sec.id})" class="icon-btn absolute top-4 right-4 opacity-0 group-hover/section:opacity-100 transition-opacity no-export" style="color:var(--rust)" title="Elimina Sezione">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+
+                        <!-- Lista Punti -->
+                        <div class="flex flex-col">
+                            ${itemsHtml}
+                        </div>
+
+                        <!-- Aggiungi Punto (Visibile sempre, anche nel PNG come richiesto) -->
+                        <button onclick="addItem(${sec.id})" class="text-sm mt-2 font-semibold transition-colors flex items-center gap-1" style="color:${accent}">
+                            <i class="fa-solid fa-plus"></i> Aggiungi punto
+                        </button>
+                    </div>
+                `;
+            });
+        }
+
+        // AGGIORNAMENTO STATO DAI CAMPI TESTUALI
+        function updateState() {
+            state.title = document.getElementById('main-title').innerText;
+            state.subtitle = document.getElementById('main-subtitle').innerText;
+        }
+
+        function updateSectionTitle(el) {
+            const secId = parseInt(el.getAttribute('data-section-title-id'));
+            const sec = state.sections.find(s => s.id === secId);
+            if (sec) sec.title = el.innerText;
+        }
+
+        function updateItemText(el) {
+            const secId = parseInt(el.getAttribute('data-section-id'));
+            const itemId = parseInt(el.getAttribute('data-item-id'));
+            const sec = state.sections.find(s => s.id === secId);
+            if (sec) {
+                const item = sec.items.find(i => i.id === itemId);
+                if (item) item.text = el.innerText;
+            }
+        }
+
+        // GESTIONE IMMAGINE
+        function uploadImage(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    state.imageSrc = e.target.result;
+                    render();
+                }
+                reader.readAsDataURL(file);
+            }
+            event.target.value = ''; // Reset input
+        }
+
+        function removeImage(event) {
+            event.stopPropagation();
+            state.imageSrc = "";
+            render();
+        }
+
+        // AZIONI SUI PUNTI ELENCO E SEZIONI
+        function addSection() {
+            state.sections.push({
+                id: Date.now(),
+                title: "Nuova Sezione:",
+                items: [{ id: Date.now() + 1, text: "Nuovo punto..." }]
+            });
+            render();
+        }
+
+        function deleteSection(secId) {
+            state.sections = state.sections.filter(s => s.id !== secId);
+            render();
+        }
+
+        function addItem(secId) {
+            const sec = state.sections.find(s => s.id === secId);
+            if (sec) {
+                sec.items.push({ id: Date.now(), text: "Nuovo punto..." });
+                render();
+            }
+        }
+
+        function deleteItem(secId, itemId) {
+            const sec = state.sections.find(s => s.id === secId);
+            if (sec) {
+                sec.items = sec.items.filter(i => i.id !== itemId);
+                render();
+            }
+        }
+
+        function moveItem(secId, itemId, direction) {
+            const sec = state.sections.find(s => s.id === secId);
+            if (!sec) return;
+
+            const index = sec.items.findIndex(i => i.id === itemId);
+            if (index < 0) return;
+
+            const newIndex = index + direction;
+            if (newIndex < 0 || newIndex >= sec.items.length) return; // Fuori dai limiti
+
+            // Scambia gli elementi
+            const temp = sec.items[index];
+            sec.items[index] = sec.items[newIndex];
+            sec.items[newIndex] = temp;
+
+            render();
+        }
+
+        // JSON IMPORT / EXPORT
+        function saveJSON() {
+            updateState(); // Assicura che i dati testuali in focus siano salvati
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state, null, 2));
+            const dlAnchorElem = document.createElement('a');
+            dlAnchorElem.setAttribute("href", dataStr);
+            dlAnchorElem.setAttribute("download", "Scheda_Studio_Visual_Note.json");
+            dlAnchorElem.click();
+        }
+
+        function loadJSON(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const parsedData = JSON.parse(e.target.result);
+                    // Applica il filtro di retrocompatibilità
+                    state = normalizeLoadedData(parsedData);
+                    render();
+                } catch (err) {
+                    alert("Errore nel caricamento del file JSON. Assicurati che sia il file corretto.");
+                    console.error(err);
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = ''; // Reset input
+        }
+
+        // ESPORTAZIONE PNG
+        function exportPNG() {
+            updateState();
+            const captureArea = document.getElementById('capture-area');
+
+            // Aggiungiamo la classe che nasconde gli elementi con .no-export
+            document.body.classList.add('is-exporting');
+
+            html2canvas(captureArea, {
+                backgroundColor: "#ECE3CB", // Colore di sfondo base dell'area
+                scale: 2, // Alta risoluzione
+                useCORS: true,
+                ignoreElements: (element) => element.classList.contains('no-export')
+            }).then(canvas => {
+                // Rimuoviamo la classe al termine dello screenshot
+                document.body.classList.remove('is-exporting');
+
+                const link = document.createElement('a');
+                link.download = 'Scheda_Studio.png';
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+            }).catch(err => {
+                document.body.classList.remove('is-exporting');
+                console.error("Errore durante l'esportazione", err);
+                alert("Si è verificato un errore durante l'esportazione dell'immagine.");
+            });
+        }
+
+        // GESTIONE MODALE RESET
+        function openModal() { document.getElementById('confirm-modal').classList.remove('hidden'); }
+        function closeModal() { document.getElementById('confirm-modal').classList.add('hidden'); }
+        function resetApp() {
+            state = {
+                title: "",
+                subtitle: "",
+                imageSrc: "",
+                sections: [
+                    { id: 1, title: "Titolo Sezione 1:", items: [{ id: 101, text: "Inserisci qui il tuo primo punto." }] },
+                    { id: 2, title: "Titolo Sezione 2:", items: [{ id: 201, text: "Inserisci qui il tuo primo punto." }] }
+                ]
+            };
+            render();
+            closeModal();
+        }
+
+        // AVVIO APPLICAZIONE
+        window.onload = () => {
+            render();
+        };
+    </script>
+</body>
+</html>
