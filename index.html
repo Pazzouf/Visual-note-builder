@@ -32,8 +32,29 @@
         </div>
     </div>
 
+<!-- MODALE ELENCO NOTE SALVATE -->
+<div id="notes-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+    <div class="p-6 rounded-lg max-w-lg w-full relative" style="background:var(--card); border:2px solid var(--ink);">
+        <h2 class="font-display text-xl font-bold mb-4" style="color:var(--ink);">Le tue note nel Cloud</h2>
+        
+        <!-- Lista dinamica delle note -->
+        <div id="notes-list" class="max-h-60 overflow-y-auto flex flex-col gap-2 mb-4 pr-1">
+            <p class="text-sm opacity-70">Caricamento in corso...</p>
+        </div>
+
+        <div class="flex justify-end">
+            <button onclick="closeSavedNotesModal()" class="px-4 py-2 text-xs font-bold rounded" style="background:var(--paper); border:1px solid var(--ink);">
+                Chiudi
+            </button>
+        </div>
+    </div>
+</div>
     <!-- Toolbar dei comandi -->
     <div class="mb-8 flex flex-wrap gap-4 no-export" id="main-toolbar">
+        <!-- PULSANTE APRI MIE LEZIONI/NOTE -->
+        <button onclick="openSavedNotesModal()" class="btn-tab px-3 py-1.5 text-xs font-semibold">
+            <i class="fa-solid fa-folder-open mr-1"></i> Le mie note
+        </button>
         <button onclick="exportPDF()" class="btn-tab px-5 py-3 font-semibold text-sm">
             <span class="tab-strip" style="background:var(--ink)"></span>
             <i class="fa-solid fa-file-pdf mr-2"></i>Esporta PDF
