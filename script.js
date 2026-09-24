@@ -1,4 +1,9 @@
-// STATO APPLICAZIONE (Inizia vuoto)
+// CONFIGURAZIONE SUPABASE
+const SUPABASE_URL = 'INSERISCI_IL_TUO_PROJECT_URL'; // Es: https://xyz.supabase.co
+const SUPABASE_KEY = 'INSERISCI_LA_TUA_PUBLISHABLE_KEY'; 
+const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// STATO APPLICAZIONE
 let state = {
     title: "",
     subtitle: "",
@@ -9,7 +14,118 @@ let state = {
     ]
 };
 
-// NORMALIZZAZIONE DATI (Retrocompatibilità per vecchi file JSON)
+// GESTIONE SUPABASE AUTHENTICATION
+async function handleSignUp() {
+    const email = document.getElementById('auth-email').value;
+    const password = document.getElementById('auth-password').value;
+
+    if (!email || !password) return alert("Inserisci email e password!");
+
+    const { data, error } = await supabase.auth.signUp({ email, password });
+    if (error) {
+        alert("Errore registrazione: " + error.message);
+    } else {
+        alert("Account creato con successo!");
+        closeAuthModal();
+        checkUserSession();
+    }
+}
+
+async function handleLogin() {
+    const email = document.getElementById('auth-email').value;
+    const password = document.getElementById('auth-password').value;
+
+    if (!email || !password) return alert("Inserisci email e password!");
+
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+        alert("Errore login: " + error.message);
+    } else {
+        alert("Login effettuato con successo!");
+        closeAuthModal();
+        checkUserSession();
+        loadLatestCloudData(); // Carica automaticamente la scheda salvata dell'utente
+    }
+}
+
+async function logout() {
+    await supabase.auth.signOut();
+    alert("Logout effettuato.");
+    checkUserSession();
+}
+
+async function checkUserSession() {
+    const { data: { user } } = await supabase.auth.getUser();
+    const statusText = document.getElementById('user-status-text');
+    const authBtn = document.getElementById('auth-btn');
+    const logoutBtn = document.getElementById('logout-btn');
+
+    if (user) {
+        statusText.innerHTML = `<i class="fa-solid fa-user-check mr-2" style="color:var(--teal)"></i> Collegato come: <b>${user.email}</b>`;
+        authBtn.classList.add('hidden');
+        logoutBtn.classList.remove('hidden');
+    } else {
+        statusText.innerHTML = `<i class="fa-solid fa-user mr-2"></i> Non sei collegato`;
+        authBtn.classList.remove('hidden');
+        logoutBtn.classList.add('hidden');
+    }
+}
+
+// SALVATAGGIO SU CLOUD (SUPABASE)
+async function saveToCloud() {
+    updateState();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+        alert("Devi accedere per poter salvare la tua scheda sul Cloud!");
+        openAuthModal();
+        return;
+    }
+
+    const titleToSave = state.title || "Scheda Senza Titolo";
+
+    const { data, error } = await supabase
+        .from('Schede')
+        .insert([
+            { 
+                title: titleToSave, 
+                content: state,
+                user_id: user.id
+            }
+        ]);
+
+    if (error) {
+        alert("Errore nel salvataggio: " + error.message);
+    } else {
+        alert("Scheda salvata nel Cloud con successo!");
+    }
+}
+
+// CARICAMENTO ULTIMA SCHEDA DA CLOUD
+async function loadLatestCloudData() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data, error } = await supabase
+        .from('Schede')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+    if (error) {
+        console.error("Errore nel recupero dati:", error);
+    } else if (data && data.length > 0) {
+        state = normalizeLoadedData(data[0].content);
+        render();
+    }
+}
+
+// APERTURA/CHIUSURA MODALE AUTH
+function openAuthModal() { document.getElementById('auth-modal').classList.remove('hidden'); }
+function closeAuthModal() { document.getElementById('auth-modal').classList.add('hidden'); }
+
+// NORMALIZZAZIONE DATI
 function normalizeLoadedData(data) {
     let normalized = {
         title: data.title || data.mainTitle || "",
@@ -23,11 +139,9 @@ function normalizeLoadedData(data) {
             let newItems = [];
             if (sec.items && Array.isArray(sec.items)) {
                 newItems = sec.items.map((item, iIdx) => {
-                    // Se il vecchio JSON aveva un array di stringhe, lo convertiamo in oggetti
                     if (typeof item === 'string') {
                         return { id: Date.now() + iIdx, text: item };
                     }
-                    // Se è già un oggetto, lo teniamo
                     return item;
                 });
             }
@@ -43,7 +157,6 @@ function normalizeLoadedData(data) {
 
 // RENDERING DELL'INTERFACCIA
 function render() {
-    // Aggiorna Header
     document.getElementById('main-title').innerText = state.title;
     document.getElementById('main-subtitle').innerText = state.subtitle;
 
@@ -63,7 +176,6 @@ function render() {
         rmvBtn.classList.add('hidden');
     }
 
-    // Aggiorna Sezioni
     const grid = document.getElementById('sections-grid');
     grid.innerHTML = '';
 
@@ -71,18 +183,14 @@ function render() {
         let itemsHtml = '';
         const accent = sIndex % 2 === 0 ? 'var(--ochre)' : 'var(--teal)';
 
-        sec.items.forEach((item, iIndex) => {
+        sec.items.forEach((item) => {
             itemsHtml += `
                 <div class="group flex items-start gap-3 relative min-w-0 mb-3 pl-1">
-                    <!-- Segno punto -->
                     <div class="w-2 h-2 mt-[7px] shrink-0" style="background:${accent}"></div>
-
-                    <!-- Testo Editable -->
                     <div contenteditable="true" data-section-id="${sec.id}" data-item-id="${item.id}"
                          class="bullet-text outline-none flex-1 text-[14px] leading-[1.5] break-words min-w-0"
                          onblur="updateItemText(this)">${item.text}</div>
 
-                    <!-- Controlli Hover (Nascosi nell'esportazione PNG) -->
                     <div class="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 absolute right-0 top-0 pl-2 no-export" style="background:var(--card);">
                         <button onclick="moveItem(${sec.id}, ${item.id}, -1)" class="icon-btn" title="Sposta Su"><i class="fa-solid fa-chevron-up"></i></button>
                         <button onclick="moveItem(${sec.id}, ${item.id}, 1)" class="icon-btn" title="Sposta Giù"><i class="fa-solid fa-chevron-down"></i></button>
@@ -94,23 +202,19 @@ function render() {
 
         grid.innerHTML += `
             <div class="p-6 card-container relative group/section" style="background:var(--card); border:1.5px solid var(--ink); box-shadow:4px 4px 0 rgba(42,35,23,0.3);">
-                <!-- Intestazione Sezione -->
                 <div class="flex items-center gap-2 mb-4 pb-2" style="border-bottom:1.5px solid var(--ink);">
                     <span class="w-2.5 h-2.5 shrink-0" style="background:${accent}"></span>
                     <div contenteditable="true" data-section-title-id="${sec.id}" class="font-display text-lg font-semibold outline-none break-words flex-1" onblur="updateSectionTitle(this)">${sec.title}</div>
                 </div>
 
-                <!-- Pulsante Elimina Sezione (Hover) -->
                 <button onclick="deleteSection(${sec.id})" class="icon-btn absolute top-4 right-4 opacity-0 group-hover/section:opacity-100 transition-opacity no-export" style="color:var(--rust)" title="Elimina Sezione">
                     <i class="fa-solid fa-trash"></i>
                 </button>
 
-                <!-- Lista Punti -->
                 <div class="flex flex-col">
                     ${itemsHtml}
                 </div>
 
-                <!-- Aggiungi Punto (Visibile sempre, anche nel PNG come richiesto) -->
                 <button onclick="addItem(${sec.id})" class="text-sm mt-2 font-semibold transition-colors flex items-center gap-1" style="color:${accent}">
                     <i class="fa-solid fa-plus"></i> Aggiungi punto
                 </button>
@@ -152,7 +256,7 @@ function uploadImage(event) {
         }
         reader.readAsDataURL(file);
     }
-    event.target.value = ''; // Reset input
+    event.target.value = '';
 }
 
 function removeImage(event) {
@@ -200,9 +304,8 @@ function moveItem(secId, itemId, direction) {
     if (index < 0) return;
 
     const newIndex = index + direction;
-    if (newIndex < 0 || newIndex >= sec.items.length) return; // Fuori dai limiti
+    if (newIndex < 0 || newIndex >= sec.items.length) return;
 
-    // Scambia gli elementi
     const temp = sec.items[index];
     sec.items[index] = sec.items[newIndex];
     sec.items[newIndex] = temp;
@@ -210,9 +313,9 @@ function moveItem(secId, itemId, direction) {
     render();
 }
 
-// JSON IMPORT / EXPORT
+// JSON LOCAL IMPORT / EXPORT
 function saveJSON() {
-    updateState(); // Assicura che i dati testuali in focus siano salvati
+    updateState();
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state, null, 2));
     const dlAnchorElem = document.createElement('a');
     dlAnchorElem.setAttribute("href", dataStr);
@@ -228,19 +331,18 @@ function loadJSON(event) {
     reader.onload = function(e) {
         try {
             const parsedData = JSON.parse(e.target.result);
-            // Applica il filtro di retrocompatibilità
             state = normalizeLoadedData(parsedData);
             render();
         } catch (err) {
-            alert("Errore nel caricamento del file JSON. Assicurati che sia il file corretto.");
+            alert("Errore nel caricamento del file JSON.");
             console.error(err);
         }
     };
     reader.readAsText(file);
-    event.target.value = ''; // Reset input
+    event.target.value = '';
 }
 
-// ESPORTAZIONE PDF (testo vettoriale reale, non un'immagine incollata)
+// ESPORTAZIONE PDF
 function exportPDF() {
     updateState();
 
@@ -251,7 +353,7 @@ function exportPDF() {
     const COLOR_INK_SOFT = [107, 95, 73];
     const COLOR_PAPER = [236, 227, 203];
     const COLOR_CARD = [247, 241, 225];
-    const ACCENTS = [[176, 127, 36], [59, 105, 99]]; // ocra, verde salvia (alternati)
+    const ACCENTS = [[176, 127, 36], [59, 105, 99]];
 
     const pageW = doc.internal.pageSize.getWidth();
     const pageH = doc.internal.pageSize.getHeight();
@@ -266,7 +368,6 @@ function exportPDF() {
 
     let y = margin;
 
-    // --- HEADER: immagine (se presente) + titolo/sottotitolo ---
     let textX = margin;
     let textW = contentW;
     const imgBox = { w: 90, h: 112 };
@@ -278,7 +379,7 @@ function exportPDF() {
             textX = margin + imgBox.w + 16;
             textW = contentW - imgBox.w - 16;
         } catch (e) {
-            console.warn('Immagine non incorporabile nel PDF (formato non supportato):', e);
+            console.warn('Immagine non incorporabile nel PDF:', e);
         }
     }
 
@@ -307,7 +408,6 @@ function exportPDF() {
     doc.line(margin, y, pageW - margin, y);
     y += 22;
 
-    // --- SEZIONI: griglia a 2 colonne ---
     const gap = 18;
     const colW = (contentW - gap) / 2;
     const pad = 12;
@@ -317,7 +417,6 @@ function exportPDF() {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(bodyFontSize);
 
-    // Pre-calcola righe e altezza di ogni sezione, per allineare correttamente le righe della griglia
     const measured = state.sections.map(sec => {
         const items = sec.items.map(it => doc.splitTextToSize(it.text || '', colW - pad * 2 - 12));
         const titleLines2 = doc.splitTextToSize(sec.title || 'Sezione', colW - pad * 2);
@@ -385,7 +484,7 @@ function exportPDF() {
     doc.save('Scheda_Studio.pdf');
 }
 
-// GESTIONE MODALE RESET
+// MODALE RESET
 function openModal() { document.getElementById('confirm-modal').classList.remove('hidden'); }
 function closeModal() { document.getElementById('confirm-modal').classList.add('hidden'); }
 function resetApp() {
@@ -405,4 +504,6 @@ function resetApp() {
 // AVVIO APPLICAZIONE
 window.onload = () => {
     render();
+    checkUserSession();
+    loadLatestCloudData();
 };
