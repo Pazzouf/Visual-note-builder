@@ -7,23 +7,45 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <!-- Supabase JS SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
-<body class="min-h-screen flex flex-col items-center py-10 px-4">
+<body class="min-h-screen flex flex-col items-center py-6 px-4">
 
-    <!-- Toolbar dei comandi (non esportata in PNG) -->
+    <!-- Barra Account Utente (in cima) -->
+    <div class="w-full max-w-5xl mb-4 flex justify-between items-center px-4 py-2 rounded-md no-export" style="background:var(--card); border:1.5px solid var(--ink);">
+        <div id="user-status-text" class="text-sm font-semibold" style="color:var(--ink)">
+            <i class="fa-solid fa-user mr-2"></i>Non sei collegato
+        </div>
+        <div class="flex gap-2">
+            <button id="auth-btn" onclick="openAuthModal()" class="btn-tab px-3 py-1.5 text-xs font-semibold">
+                <i class="fa-solid fa-right-to-bracket mr-1"></i> Accedi / Registrati
+            </button>
+            <button id="logout-btn" onclick="logout()" class="btn-tab px-3 py-1.5 text-xs font-semibold hidden" style="background:var(--rust); color:var(--card);">
+                <i class="fa-solid fa-right-from-bracket mr-1"></i> Logout
+            </button>
+        </div>
+    </div>
+
+    <!-- Toolbar dei comandi -->
     <div class="mb-8 flex flex-wrap gap-4 no-export" id="main-toolbar">
         <button onclick="exportPDF()" class="btn-tab px-5 py-3 font-semibold text-sm">
             <span class="tab-strip" style="background:var(--ink)"></span>
             <i class="fa-solid fa-file-pdf mr-2"></i>Esporta PDF
         </button>
+        <!-- Pulsante Salva su Cloud -->
+        <button onclick="saveToCloud()" class="btn-tab px-5 py-3 font-semibold text-sm">
+            <span class="tab-strip" style="background:var(--teal)"></span>
+            <i class="fa-solid fa-cloud-arrow-up mr-2"></i>Salva su Cloud
+        </button>
         <button onclick="saveJSON()" class="btn-tab px-5 py-3 font-semibold text-sm">
             <span class="tab-strip" style="background:var(--teal)"></span>
-            <i class="fa-solid fa-floppy-disk mr-2"></i>Salva dati
+            <i class="fa-solid fa-floppy-disk mr-2"></i>Salva dati locale
         </button>
         <label class="btn-tab px-5 py-3 font-semibold text-sm cursor-pointer">
             <span class="tab-strip" style="background:var(--ink-soft)"></span>
@@ -80,6 +102,26 @@
             <button onclick="addSection()" class="btn-tab mt-6 px-4 py-2 text-sm font-semibold flex items-center gap-2 no-export">
                 <i class="fa-solid fa-plus"></i> Aggiungi nuova sezione
             </button>
+        </div>
+    </div>
+
+    <!-- Modale Login / Registrazione -->
+    <div id="auth-modal" class="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center hidden z-50 px-4">
+        <div class="hard-shadow p-7 max-w-md w-full" style="background:var(--card); border:2px solid var(--ink);">
+            <h3 class="font-display text-2xl font-semibold mb-4 text-center">Accedi o Registrati</h3>
+            <div class="mb-4">
+                <label class="block text-sm font-semibold mb-1">Email</label>
+                <input type="email" id="auth-email" class="w-full p-2 border border-black rounded" placeholder="es. studente@classe.it">
+            </div>
+            <div class="mb-6">
+                <label class="block text-sm font-semibold mb-1">Password</label>
+                <input type="password" id="auth-password" class="w-full p-2 border border-black rounded" placeholder="******">
+            </div>
+            <div class="flex flex-col gap-3">
+                <button onclick="handleLogin()" class="btn-tab py-2 font-semibold text-sm w-full" style="background:var(--teal); color:white;">Accedi</button>
+                <button onclick="handleSignUp()" class="btn-tab py-2 font-semibold text-sm w-full">Crea un nuovo Account</button>
+                <button onclick="closeAuthModal()" class="text-xs mt-2 underline text-center" style="color:var(--ink-soft)">Chiudi</button>
+            </div>
         </div>
     </div>
 
