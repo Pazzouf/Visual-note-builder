@@ -240,42 +240,6 @@ function loadJSON(event) {
     event.target.value = ''; // Reset input
 }
 
-// ESPORTAZIONE PNG
-function exportPNG() {
-    updateState();
-    const captureArea = document.getElementById('capture-area');
-
-    // Aggiungiamo la classe che nasconde gli elementi con .no-export
-    document.body.classList.add('is-exporting');
-
-    // Aspettiamo due frame di rendering prima dello snapshot: senza questa pausa
-    // html2canvas può catturare il layout un istante prima che il browser abbia
-    // finito di ricalcolare posizioni/altezze dopo aver nascosto i controlli,
-    // causando testo leggermente sfasato rispetto al resto della scheda.
-    requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-            html2canvas(captureArea, {
-                backgroundColor: "#ECE3CB", // Colore di sfondo base dell'area
-                scale: 2, // Alta risoluzione
-                useCORS: true,
-                ignoreElements: (element) => element.classList.contains('no-export')
-            }).then(canvas => {
-                // Rimuoviamo la classe al termine dello screenshot
-                document.body.classList.remove('is-exporting');
-
-                const link = document.createElement('a');
-                link.download = 'Scheda_Studio.png';
-                link.href = canvas.toDataURL('image/png');
-                link.click();
-            }).catch(err => {
-                document.body.classList.remove('is-exporting');
-                console.error("Errore durante l'esportazione", err);
-                alert("Si è verificato un errore durante l'esportazione dell'immagine.");
-            });
-        });
-    });
-}
-
 // ESPORTAZIONE PDF (testo vettoriale reale, non un'immagine incollata)
 function exportPDF() {
     updateState();
