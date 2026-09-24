@@ -1,6 +1,6 @@
 // CONFIGURAZIONE SUPABASE
-const SUPABASE_URL = 'INSERISCI_IL_TUO_PROJECT_URL'; // Es: https://xyz.supabase.co
-const SUPABASE_KEY = 'INSERISCI_LA_TUA_PUBLISHABLE_KEY'; 
+const SUPABASE_URL = 'https://vhmhyyboxknwiivtkmkt.supabase.co/rest/v1/'; // Es: https://xyz.supabase.co
+const SUPABASE_KEY = 'sb_publishable_ryh33a67Gk7M4bSH14V4-w_e8pct44S'; 
 const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // STATO APPLICAZIONE
