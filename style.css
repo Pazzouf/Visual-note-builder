@@ -29,7 +29,10 @@ body {
 }
 [contenteditable]:focus { outline: none; background: rgba(176,127,36,0.08); }
 
-.is-exporting .no-export { display: none !important; }
+.is-exporting .no-export {
+    visibility: hidden !important;
+    pointer-events: none !important;
+}
 .card-container { min-width: 0; word-wrap: break-word; }
 
 .hard-shadow { box-shadow: 5px 5px 0 var(--ink); }
