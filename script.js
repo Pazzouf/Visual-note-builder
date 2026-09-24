@@ -1,7 +1,15 @@
 // CONFIGURAZIONE SUPABASE
 const SUPABASE_URL = 'https://vhmhyyboxknwiivtkmkt.supabase.co/rest/v1/'; // Es: https://xyz.supabase.co
-const SUPABASE_KEY = 'sb_publishable_ryh33a67Gk7M4bSH14V4-w_e8pct44S'; 
-const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const SUPABASE_KEY = 'sb_publishable_ryh33a67Gk7M4bSH14V4-w_e8pct44S';
+
+// Funzione helper per ottenere sempre il client pronto
+function getSupabase() {
+    if (typeof supabase === 'undefined') {
+        console.error("La libreria Supabase non è ancora stata caricata dall'HTML!");
+        return null;
+    }
+    return supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+}
 
 // STATO APPLICAZIONE
 let state = {
@@ -16,12 +24,15 @@ let state = {
 
 // GESTIONE SUPABASE AUTHENTICATION
 async function handleSignUp() {
+    const client = getSupabase();
+    if (!client) return alert("Errore di connessione a Supabase. Ricarica la pagina.");
+
     const email = document.getElementById('auth-email').value;
     const password = document.getElementById('auth-password').value;
 
     if (!email || !password) return alert("Inserisci email e password!");
 
-    const { data, error } = await supabaseClient.auth.signUp({ email, password });
+    const { data, error } = await client.auth.signUp({ email, password });
     if (error) {
         alert("Errore registrazione: " + error.message);
     } else {
@@ -32,30 +43,37 @@ async function handleSignUp() {
 }
 
 async function handleLogin() {
+    const client = getSupabase();
+    if (!client) return alert("Errore di connessione a Supabase. Ricarica la pagina.");
+
     const email = document.getElementById('auth-email').value;
     const password = document.getElementById('auth-password').value;
 
     if (!email || !password) return alert("Inserisci email e password!");
 
-    const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+    const { data, error } = await client.auth.signInWithPassword({ email, password });
     if (error) {
         alert("Errore login: " + error.message);
     } else {
         alert("Login effettuato con successo!");
         closeAuthModal();
         checkUserSession();
-        loadLatestCloudData(); // Carica automaticamente la scheda salvata dell'utente
+        loadLatestCloudData();
     }
 }
 
 async function logout() {
-    await supabaseClient.auth.signOut();
+    const client = getSupabase();
+    if (client) await client.auth.signOut();
     alert("Logout effettuato.");
     checkUserSession();
 }
 
 async function checkUserSession() {
-    const { data: { user } } = await supabaseClient.auth.getUser();
+    const client = getSupabase();
+    if (!client) return;
+
+    const { data: { user } } = await client.auth.getUser();
     const statusText = document.getElementById('user-status-text');
     const authBtn = document.getElementById('auth-btn');
     const logoutBtn = document.getElementById('logout-btn');
@@ -74,7 +92,10 @@ async function checkUserSession() {
 // SALVATAGGIO SU CLOUD (SUPABASE)
 async function saveToCloud() {
     updateState();
-    const { data: { user } } = await supabaseClient.auth.getUser();
+    const client = getSupabase();
+    if (!client) return alert("Errore di connessione a Supabase.");
+
+    const { data: { user } } = await client.auth.getUser();
 
     if (!user) {
         alert("Devi accedere per poter salvare la tua scheda sul Cloud!");
@@ -84,7 +105,7 @@ async function saveToCloud() {
 
     const titleToSave = state.title || "Scheda Senza Titolo";
 
-    const { data, error } = await supabaseClient
+    const { data, error } = await client
         .from('Schede')
         .insert([
             { 
@@ -103,10 +124,13 @@ async function saveToCloud() {
 
 // CARICAMENTO ULTIMA SCHEDA DA CLOUD
 async function loadLatestCloudData() {
-    const { data: { user } } = await supabaseClient.auth.getUser();
+    const client = getSupabase();
+    if (!client) return;
+
+    const { data: { user } } = await client.auth.getUser();
     if (!user) return;
 
-    const { data, error } = await supabaseClient
+    const { data, error } = await client
         .from('Schede')
         .select('*')
         .eq('user_id', user.id)
