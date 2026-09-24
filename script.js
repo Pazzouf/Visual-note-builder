@@ -320,6 +320,113 @@ function deleteItem(secId, itemId) {
     }
 }
 
+// APERTURA / CHIUSURA MODALE NOTE
+async function openSavedNotesModal() {
+    const client = getSupabase();
+    if (!client) return alert("Errore di connessione a Supabase.");
+
+    const { data: { user } } = await client.auth.getUser();
+    if (!user) {
+        alert("Devi accedere per visualizzare le tue note salvate!");
+        openAuthModal();
+        return;
+    }
+
+    document.getElementById('notes-modal').classList.remove('hidden');
+    await fetchUserNotes(user.id);
+}
+
+function closeSavedNotesModal() {
+    document.getElementById('notes-modal').classList.add('hidden');
+}
+
+// RECUPERO E RENDERING LISTA NOTE DA SUPABASE
+async function fetchUserNotes(userId) {
+    const client = getSupabase();
+    const listContainer = document.getElementById('notes-list');
+    listContainer.innerHTML = '<p class="text-sm opacity-70">Caricamento note...</p>';
+
+    const { data, error } = await client
+        .from('Schede')
+        .select('id, title, created_at, content')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        listContainer.innerHTML = `<p class="text-sm text-red-500">Errore: ${error.message}</p>`;
+        return;
+    }
+
+    if (!data || data.length === 0) {
+        listContainer.innerHTML = '<p class="text-sm opacity-70">Nessuna nota salvata nel Cloud.</p>';
+        return;
+    }
+
+    listContainer.innerHTML = '';
+    data.forEach(note => {
+        const dateFormatted = new Date(note.created_at).toLocaleDateString('it-IT', {
+            day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+        });
+
+        const item = document.createElement('div');
+        item.className = "flex items-center justify-between p-3 rounded cursor-pointer transition-all hover:brightness-95";
+        item.style.cssText = "background:var(--paper); border:1px solid var(--ink);";
+
+        item.innerHTML = `
+            <div class="overflow-hidden pr-2">
+                <div class="font-semibold text-sm truncate" style="color:var(--ink);">${note.title || 'Senza Titolo'}</div>
+                <div class="text-[11px] opacity-60">${dateFormatted}</div>
+            </div>
+            <div class="flex gap-2 shrink-0">
+                <button onclick="loadSpecificNote('${note.id}')" class="px-2 py-1 text-xs font-bold rounded" style="background:var(--teal); color:white;">
+                    Carica
+                </button>
+                <button onclick="deleteNote('${note.id}')" class="px-2 py-1 text-xs font-bold rounded" style="background:var(--rust); color:white;">
+                    <i class="fa-solid fa-trash"></i>
+                </button>
+            </div>
+        `;
+        listContainer.appendChild(item);
+    });
+}
+
+// CARICA UNA NOTA SELEZIONATA
+async function loadSpecificNote(noteId) {
+    const client = getSupabase();
+    const { data, error } = await client
+        .from('Schede')
+        .select('content')
+        .eq('id', noteId)
+        .single();
+
+    if (error) {
+        alert("Errore nel caricamento della nota: " + error.message);
+    } else if (data) {
+        state = normalizeLoadedData(data.content);
+        render();
+        closeSavedNotesModal();
+    }
+}
+
+// ELIMINA UNA NOTA DAL CLOUD
+async function deleteNote(noteId) {
+    if (!confirm("Sei sicuro di voler eliminare questa scheda?")) return;
+
+    const client = getSupabase();
+    const { data: { user } } = await client.auth.getUser();
+
+    const { error } = await client
+        .from('Schede')
+        .delete()
+        .eq('id', noteId);
+
+    if (error) {
+        alert("Errore nell'eliminazione: " + error.message);
+    } else {
+        await fetchUserNotes(user.id);
+    }
+}
+
 function moveItem(secId, itemId, direction) {
     const sec = state.sections.find(s => s.id === secId);
     if (!sec) return;
