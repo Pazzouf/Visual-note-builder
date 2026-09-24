@@ -1,7 +1,7 @@
 // CONFIGURAZIONE SUPABASE
 const SUPABASE_URL = 'https://vhmhyyboxknwiivtkmkt.supabase.co/rest/v1/'; // Es: https://xyz.supabase.co
 const SUPABASE_KEY = 'sb_publishable_ryh33a67Gk7M4bSH14V4-w_e8pct44S'; 
-const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // STATO APPLICAZIONE
 let state = {
