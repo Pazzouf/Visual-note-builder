@@ -248,59 +248,177 @@ function exportPNG() {
     // Aggiungiamo la classe che nasconde gli elementi con .no-export
     document.body.classList.add('is-exporting');
 
-    html2canvas(captureArea, {
-        backgroundColor: "#ECE3CB", // Colore di sfondo base dell'area
-        scale: 2, // Alta risoluzione
-        useCORS: true,
-        ignoreElements: (element) => element.classList.contains('no-export')
-    }).then(canvas => {
-        // Rimuoviamo la classe al termine dello screenshot
-        document.body.classList.remove('is-exporting');
+    // Aspettiamo due frame di rendering prima dello snapshot: senza questa pausa
+    // html2canvas può catturare il layout un istante prima che il browser abbia
+    // finito di ricalcolare posizioni/altezze dopo aver nascosto i controlli,
+    // causando testo leggermente sfasato rispetto al resto della scheda.
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            html2canvas(captureArea, {
+                backgroundColor: "#ECE3CB", // Colore di sfondo base dell'area
+                scale: 2, // Alta risoluzione
+                useCORS: true,
+                ignoreElements: (element) => element.classList.contains('no-export')
+            }).then(canvas => {
+                // Rimuoviamo la classe al termine dello screenshot
+                document.body.classList.remove('is-exporting');
 
-        const link = document.createElement('a');
-        link.download = 'Scheda_Studio.png';
-        link.href = canvas.toDataURL('image/png');
-        link.click();
-    }).catch(err => {
-        document.body.classList.remove('is-exporting');
-        console.error("Errore durante l'esportazione", err);
-        alert("Si è verificato un errore durante l'esportazione dell'immagine.");
+                const link = document.createElement('a');
+                link.download = 'Scheda_Studio.png';
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+            }).catch(err => {
+                document.body.classList.remove('is-exporting');
+                console.error("Errore durante l'esportazione", err);
+                alert("Si è verificato un errore durante l'esportazione dell'immagine.");
+            });
+        });
     });
 }
 
-// ESPORTAZIONE PDF
+// ESPORTAZIONE PDF (testo vettoriale reale, non un'immagine incollata)
 function exportPDF() {
     updateState();
-    const captureArea = document.getElementById('capture-area');
 
-    document.body.classList.add('is-exporting');
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'pt', format: 'a4' });
 
-    html2canvas(captureArea, {
-        backgroundColor: "#ECE3CB",
-        scale: 2,
-        useCORS: true,
-        ignoreElements: (element) => element.classList.contains('no-export')
-    }).then(canvas => {
-        document.body.classList.remove('is-exporting');
+    const COLOR_INK = [42, 35, 23];
+    const COLOR_INK_SOFT = [107, 95, 73];
+    const COLOR_PAPER = [236, 227, 203];
+    const COLOR_CARD = [247, 241, 225];
+    const ACCENTS = [[176, 127, 36], [59, 105, 99]]; // ocra, verde salvia (alternati)
 
-        const imgData = canvas.toDataURL('image/png');
-        const { jsPDF } = window.jspdf;
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    const margin = 42;
+    const contentW = pageW - margin * 2;
 
-        // Pagina PDF con le stesse proporzioni dell'immagine catturata
-        const orientation = canvas.width >= canvas.height ? 'l' : 'p';
-        const pdf = new jsPDF({
-            orientation: orientation,
-            unit: 'px',
-            format: [canvas.width, canvas.height]
-        });
+    function paintBackground() {
+        doc.setFillColor(...COLOR_PAPER);
+        doc.rect(0, 0, pageW, pageH, 'F');
+    }
+    paintBackground();
 
-        pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
-        pdf.save('Scheda_Studio.pdf');
-    }).catch(err => {
-        document.body.classList.remove('is-exporting');
-        console.error("Errore durante l'esportazione PDF", err);
-        alert("Si è verificato un errore durante l'esportazione del PDF.");
+    let y = margin;
+
+    // --- HEADER: immagine (se presente) + titolo/sottotitolo ---
+    let textX = margin;
+    let textW = contentW;
+    const imgBox = { w: 90, h: 112 };
+
+    if (state.imageSrc) {
+        try {
+            const fmt = state.imageSrc.includes('image/png') ? 'PNG' : 'JPEG';
+            doc.addImage(state.imageSrc, fmt, margin, y, imgBox.w, imgBox.h);
+            textX = margin + imgBox.w + 16;
+            textW = contentW - imgBox.w - 16;
+        } catch (e) {
+            console.warn('Immagine non incorporabile nel PDF (formato non supportato):', e);
+        }
+    }
+
+    doc.setFont('times', 'bold');
+    doc.setFontSize(22);
+    doc.setTextColor(...COLOR_INK);
+    const titleLines = doc.splitTextToSize(state.title || 'Senza titolo', textW);
+    doc.text(titleLines, textX, y + 22);
+    const titleBlockH = titleLines.length * 26;
+
+    let subBlockH = 0;
+    if (state.subtitle) {
+        doc.setFont('times', 'italic');
+        doc.setFontSize(13);
+        doc.setTextColor(...COLOR_INK_SOFT);
+        const subLines = doc.splitTextToSize(state.subtitle, textW);
+        doc.text(subLines, textX, y + 22 + titleBlockH + 2);
+        subBlockH = subLines.length * 16;
+    }
+
+    const headerH = Math.max(imgBox.h, titleBlockH + subBlockH + 22) + 14;
+    y += headerH;
+
+    doc.setDrawColor(...COLOR_INK);
+    doc.setLineWidth(1);
+    doc.line(margin, y, pageW - margin, y);
+    y += 22;
+
+    // --- SEZIONI: griglia a 2 colonne ---
+    const gap = 18;
+    const colW = (contentW - gap) / 2;
+    const pad = 12;
+    const bodyFontSize = 10.5;
+    const lineH = 14;
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(bodyFontSize);
+
+    // Pre-calcola righe e altezza di ogni sezione, per allineare correttamente le righe della griglia
+    const measured = state.sections.map(sec => {
+        const items = sec.items.map(it => doc.splitTextToSize(it.text || '', colW - pad * 2 - 12));
+        const titleLines2 = doc.splitTextToSize(sec.title || 'Sezione', colW - pad * 2);
+        const itemsH = items.reduce((sum, lines) => sum + lines.length * lineH + 6, 0);
+        const h = pad * 2 + titleLines2.length * 16 + 8 + itemsH;
+        return { items, titleLines: titleLines2, h };
     });
+
+    function ensureSpace(h) {
+        if (y + h > pageH - margin) {
+            doc.addPage();
+            paintBackground();
+            y = margin;
+        }
+    }
+
+    function drawSectionBox(m, x, yy, w, index) {
+        const accent = ACCENTS[index % 2];
+
+        doc.setDrawColor(...COLOR_INK);
+        doc.setLineWidth(1);
+        doc.setFillColor(...COLOR_CARD);
+        doc.rect(x, yy, w, m.h, 'FD');
+
+        let cy = yy + pad + 10;
+        doc.setFillColor(...accent);
+        doc.rect(x + pad, cy - 8, 6, 6, 'F');
+
+        doc.setFont('times', 'bold');
+        doc.setFontSize(12.5);
+        doc.setTextColor(...COLOR_INK);
+        doc.text(m.titleLines, x + pad + 12, cy);
+        cy += m.titleLines.length * 16 + 4;
+
+        doc.setDrawColor(...COLOR_INK);
+        doc.setLineWidth(0.6);
+        doc.line(x + pad, cy - 10, x + w - pad, cy - 10);
+        cy += 4;
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(bodyFontSize);
+        doc.setTextColor(...COLOR_INK);
+
+        m.items.forEach(lines => {
+            doc.setFillColor(...accent);
+            doc.rect(x + pad, cy - 6, 4, 4, 'F');
+            doc.text(lines, x + pad + 12, cy);
+            cy += lines.length * lineH + 6;
+        });
+    }
+
+    for (let i = 0; i < measured.length; i += 2) {
+        const left = measured[i];
+        const right = measured[i + 1];
+        const rowH = Math.max(left.h, right ? right.h : 0);
+
+        ensureSpace(rowH);
+
+        drawSectionBox(left, margin, y, colW, i);
+        if (right) drawSectionBox(right, margin + colW + gap, y, colW, i + 1);
+
+        y += rowH + gap;
+    }
+
+    doc.save('Scheda_Studio.pdf');
 }
 
 // GESTIONE MODALE RESET
