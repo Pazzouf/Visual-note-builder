@@ -21,7 +21,7 @@ async function handleSignUp() {
 
     if (!email || !password) return alert("Inserisci email e password!");
 
-    const { data, error } = await supabase.auth.signUp({ email, password });
+    const { data, error } = await supabaseClient.auth.signUp({ email, password });
     if (error) {
         alert("Errore registrazione: " + error.message);
     } else {
@@ -37,7 +37,7 @@ async function handleLogin() {
 
     if (!email || !password) return alert("Inserisci email e password!");
 
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
     if (error) {
         alert("Errore login: " + error.message);
     } else {
@@ -49,13 +49,13 @@ async function handleLogin() {
 }
 
 async function logout() {
-    await supabase.auth.signOut();
+    await supabaseClient.auth.signOut();
     alert("Logout effettuato.");
     checkUserSession();
 }
 
 async function checkUserSession() {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user } } = await supabaseClient.auth.getUser();
     const statusText = document.getElementById('user-status-text');
     const authBtn = document.getElementById('auth-btn');
     const logoutBtn = document.getElementById('logout-btn');
@@ -74,7 +74,7 @@ async function checkUserSession() {
 // SALVATAGGIO SU CLOUD (SUPABASE)
 async function saveToCloud() {
     updateState();
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user } } = await supabaseClient.auth.getUser();
 
     if (!user) {
         alert("Devi accedere per poter salvare la tua scheda sul Cloud!");
@@ -84,7 +84,7 @@ async function saveToCloud() {
 
     const titleToSave = state.title || "Scheda Senza Titolo";
 
-    const { data, error } = await supabase
+    const { data, error } = await supabaseClient
         .from('Schede')
         .insert([
             { 
@@ -103,10 +103,10 @@ async function saveToCloud() {
 
 // CARICAMENTO ULTIMA SCHEDA DA CLOUD
 async function loadLatestCloudData() {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user } } = await supabaseClient.auth.getUser();
     if (!user) return;
 
-    const { data, error } = await supabase
+    const { data, error } = await supabaseClient
         .from('Schede')
         .select('*')
         .eq('user_id', user.id)
@@ -501,9 +501,9 @@ function resetApp() {
     closeModal();
 }
 
-// AVVIO APPLICAZIONE
-window.onload = () => {
+// AVVIO APPLICAZIONE (Caricamento sicuro del DOM)
+document.addEventListener('DOMContentLoaded', () => {
     render();
     checkUserSession();
     loadLatestCloudData();
-};
+});
